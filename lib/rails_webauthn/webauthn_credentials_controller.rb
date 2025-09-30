@@ -7,33 +7,35 @@ module RailsWebauthn
     # ------------------------
     before_action :authenticate_user!, except: %i[check_registered begin_authentication verify_authentication]
 
-    # Returns the model configured in RailsWebauthn
-    def user_model
-      RailsWebauthn.configuration.user_model.constantize
+    # Apps must implement these methods in their controller
+    def find_user_by_email(email)
+      raise "Please implement `find_user_by_email` in your app controller"
     end
 
-    # Apps must provide a `current_user` method or fallback will raise
-    def current_user
-      if defined?(super)
-        super
-      else
-        raise "Please define `current_user` method in your ApplicationController to use RailsWebauthn"
-      end
+    def loggedin_user
+      raise "Please define `loggedin_user` method in your ApplicationController to use RailsWebauthn"
     end
 
-    # Called after successful authentication, override in app
+    # Called after successful authentication
     def after_webauthn_authentication(user)
-      session[:user_id] = user.id if respond_to?(:session)
+      set_session_after_webauthn_authentication(user)
+      render json: {
+        success: true,
+        redirect_url: webauthn_redirect_url(user),
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name
+        }
+      }
     end
 
-    # Customize returned user data
-    def user_authentication_data(user)
-      { id: user.id, email: user.email, name: user.try(:name) }
+    def webauthn_redirect_url(user)
+      raise "Please implement `webauthn_redirect_url(user)` in your app controller"
     end
 
-    # Namespaced session storage for WebAuthn
-    def webauthn_session
-      session[:rails_webauthn] ||= {}
+    def set_session_after_webauthn_authentication(user)
+      raise "Please implement `set_session_after_webauthn_authentication(user)` in your app controller"
     end
 
     # ------------------------
@@ -43,7 +45,7 @@ module RailsWebauthn
       email = params[:email]
       return render json: { error: 'Email parameter is required' }, status: :bad_request if email.blank?
 
-      user = user_model.find_by(email: email)
+      user = find_user_by_email(email)
       has_webauthn_credentials = user&.webauthn_credentials&.exists? || false
 
       render json: {
@@ -55,7 +57,7 @@ module RailsWebauthn
     end
 
     def begin_registration
-      user = current_user
+      user = loggedin_user
       return render json: { error: 'Authentication required' }, status: :unauthorized unless user
 
       options = WebAuthn::Credential.options_for_create(
@@ -82,7 +84,7 @@ module RailsWebauthn
     end
 
     def verify_registration
-      user = current_user || user_model.find_by(id: webauthn_session[:user_id])
+      user = loggedin_user || User.find_by(id: webauthn_session[:user_id])
       return render json: { error: 'User not found' }, status: :not_found unless user
       return render json: { error: 'No active registration challenge' }, status: :bad_request unless webauthn_session[:challenge]
 
@@ -114,7 +116,7 @@ module RailsWebauthn
       email = params[:email]
       return render json: { error: 'Email parameter is required' }, status: :bad_request if email.blank?
 
-      user = user_model.find_by(email: email)
+      user = find_user_by_email(email)
       return render json: { error: 'No passkeys found for this user' }, status: :not_found unless user&.webauthn_credentials&.exists?
 
       options = WebAuthn::Credential.options_for_get(
@@ -131,7 +133,7 @@ module RailsWebauthn
 
     def verify_authentication
       email = webauthn_session[:user_email]
-      user = user_model.find_by(email: email)
+      user = find_user_by_email(email)
       return render json: { error: 'User not found' }, status: :not_found unless user
       return render json: { error: 'No active authentication challenge' }, status: :bad_request unless webauthn_session[:challenge]
 
@@ -150,12 +152,6 @@ module RailsWebauthn
         webauthn_session.clear
 
         after_webauthn_authentication(user)
-
-        render json: {
-          success: true,
-          message: 'Authentication successful',
-          user: user_authentication_data(user)
-        }
       rescue WebAuthn::Error => e
         render json: { error: "Authentication failed: #{e.message}" }, status: :unprocessable_entity
       end
@@ -165,12 +161,12 @@ module RailsWebauthn
     # Credential Management
     # ------------------------
     def index
-      credentials = current_user.webauthn_credentials.select(:id, :nickname, :created_at)
+      credentials = loggedin_user.webauthn_credentials.select(:id, :nickname, :created_at)
       render json: { credentials: credentials, count: credentials.size }
     end
 
     def destroy
-      credential = current_user.webauthn_credentials.find(params[:id])
+      credential = loggedin_user.webauthn_credentials.find(params[:id])
       credential.destroy!
       render json: { success: true, message: 'Passkey removed successfully' }
     rescue ActiveRecord::RecordNotFound
@@ -178,7 +174,7 @@ module RailsWebauthn
     end
 
     def update
-      credential = current_user.webauthn_credentials.find(params[:id])
+      credential = loggedin_user.webauthn_credentials.find(params[:id])
       if credential.update(credential_params)
         render json: { success: true, message: 'Passkey updated successfully', credential: credential.slice(:id, :nickname, :created_at) }
       else
@@ -226,9 +222,12 @@ module RailsWebauthn
       "#{browser} on #{platform}"
     end
 
-    # Default authenticate_user! hook
+    def webauthn_session
+      session[:rails_webauthn] ||= {}
+    end
+
     def authenticate_user!
-      current_user || raise("Please provide authentication logic in ApplicationController")
+      loggedin_user || raise("Please provide authentication logic in ApplicationController")
     end
   end
 end

@@ -3,7 +3,10 @@ module RailsWebauthn
     extend ActiveSupport::Concern
 
     included do
-      has_many :webauthn_credentials, dependent: :destroy
+      has_many :webauthn_credentials,
+               class_name: 'RailsWebauthn::WebauthnCredential',
+               dependent: :destroy
+
       before_create :ensure_webauthn_id
     end
 
@@ -17,8 +20,8 @@ module RailsWebauthn
 
     private
 
-      def ensure_webauthn_id
-        self.webauthn_id ||= WebAuthn.generate_user_id
-      end
+    def ensure_webauthn_id
+      self.webauthn_id ||= WebAuthn.generate_user_id
+    end
   end
 end

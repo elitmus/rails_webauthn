@@ -1,6 +1,5 @@
 RailsWebauthn.configure do |config|
   config.rp_name = 'MyApp'
-  config.user_model = 'User'
   config.encoding = :base64url
 
   case Rails.env

@@ -15,10 +15,9 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata = {
-    "homepage_uri"   => spec.homepage,
-    "source_code_uri"=> "https://github.com/elitmus/rails_webauthn",
+    "source_code_uri"=> spec.homepage,
     "changelog_uri"  => "https://github.com/elitmus/rails_webauthn/blob/main/CHANGELOG.md",
-    "documentation_uri" => "https://rubydoc.info/gems/rails_webauthn"
+    "documentation_uri" => "https://github.com/elitmus/rails_webauthn/README.md"
   }
 
   # Include all tracked files, excluding development-only files
@@ -35,10 +34,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # === Runtime dependencies ===
-  spec.add_dependency "rails", ">= 7.0", "< 8.0"
+  spec.add_dependency "rails", ">= 7.0", "< 9.0"
   spec.add_dependency "webauthn", "~> 3.0" # official ruby-webauthn gem
-
-  # === Development dependencies ===
-  spec.add_development_dependency "rspec-rails", "~> 6.0"
-  spec.add_development_dependency "rubocop", "~> 1.0"
 end
